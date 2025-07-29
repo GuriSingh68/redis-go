@@ -6,11 +6,16 @@ import (
 	"net"
 	"os"
 	"strings"
+	"sync"
 )
 
 // Ensures gofmt doesn't remove the "net" and "os" imports in stage 1 (feel free to remove this!)
 var _ = net.Listen
 var _ = os.Exit
+var (
+	store = make(map[string]string)
+	mu    sync.Mutex
+)
 
 func handlePing(conn net.Conn) {
 	conn.Write([]byte("+PONG\r\n"))
@@ -25,6 +30,24 @@ func handlePing(conn net.Conn) {
 //	}
 func handleEcho(conn net.Conn, message string) {
 	conn.Write([]byte(fmt.Sprintf("+%s\r\n", message)))
+}
+
+func handleSet(conn net.Conn, key, value string) {
+	mu.Lock()
+	store[key] = value
+	mu.Unlock()
+	conn.Write([]byte("+OK\r\n"))
+}
+
+func handleGet(conn net.Conn, key string) {
+	mu.Lock()
+	value, ok := store[key]
+	mu.Unlock()
+	if ok {
+		conn.Write([]byte(fmt.Sprintf("+%s\r\n", value)))
+	} else {
+		conn.Write([]byte("-ERR key not found\r\n"))
+	}
 }
 
 func handle(conn net.Conn) {
@@ -43,11 +66,15 @@ func handle(conn net.Conn) {
 		commandArray := strings.Split(commandString, "\r\n")
 		for i, command := range commandArray {
 
-			if command == "PING" {
+			switch command {
+			case "PING":
 				handlePing(conn)
-			} else if command == "ECHO" {
+			case "ECHO":
 				handleEcho(conn, commandArray[i+2])
-
+			case "SET":
+				handleSet(conn, commandArray[i+3], commandArray[i+4])
+			case "GET":
+				handleGet(conn, commandArray[i+3])
 			}
 		}
 
