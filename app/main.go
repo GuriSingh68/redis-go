@@ -74,7 +74,7 @@ func handle(conn net.Conn) {
 			case "SET":
 				handleSet(conn, commandArray[i+3], commandArray[i+4])
 			case "GET":
-				handleGet(conn, commandArray[i+3])
+				handleGet(conn, commandArray[i+1])
 			}
 		}
 
