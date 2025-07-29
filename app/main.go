@@ -38,6 +38,7 @@ func handleConnection(conn net.Conn) {
 			conn.Write([]byte("+PONG\r\n"))
 		} else if strings.Contains(strings.ToUpper(text), "ECHO") {
 			// Extract the message after ECHO
+
 			lines := strings.Split(text, "\n")
 			var message string
 			echoFound := false
