@@ -44,7 +44,7 @@ func handleGet(conn net.Conn, key string) {
 	value, ok := store[key]
 	mu.Unlock()
 	if ok {
-		conn.Write([]byte(fmt.Sprintf("+%s\r\n", value)))
+		conn.Write([]byte(fmt.Sprintf("$%d\r\n%s\r\n", len(value), value)))
 	} else {
 		conn.Write([]byte("-ERR key not found\r\n"))
 	}
