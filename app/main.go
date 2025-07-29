@@ -3,18 +3,24 @@ package main
 import (
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"os"
 	"strings"
 	"sync"
+	"time"
 )
 
 // Ensures gofmt doesn't remove the "net" and "os" imports in stage 1 (feel free to remove this!)
 var _ = net.Listen
 var _ = os.Exit
+
+type entry struct {
+	value      string
+	expiryTime int64
+}
+
 var (
-	store = make(map[string]string)
+	store = make(map[string]entry)
 	mu    sync.Mutex
 )
 
@@ -33,23 +39,30 @@ func handleEcho(conn net.Conn, message string) {
 	conn.Write([]byte(fmt.Sprintf("+%s\r\n", message)))
 }
 
-func handleSet(conn net.Conn, key, value string) {
+func handleSet(conn net.Conn, key, value string, pxMillis int64) {
 	mu.Lock()
-	log.Println("Setting key:", key, "to value:", value)
-	store[key] = value
-	mu.Unlock()
+	defer mu.Unlock()
+	var exp int64
+	if pxMillis > 0 {
+		exp = time.Now().UnixMilli() + pxMillis
+	} else {
+		exp = 0 // No expiry
+	}
+	store[key] = entry{value: value, expiryTime: exp}
 	conn.Write([]byte("+OK\r\n"))
 }
 
 func handleGet(conn net.Conn, key string) {
 	mu.Lock()
-	value, ok := store[key]
-	log.Println("Getting key:", key, "with value:", value, "found:", ok)
-	mu.Unlock()
-	if ok {
-		conn.Write([]byte(fmt.Sprintf("$%d\r\n%s\r\n", len(value), value)))
+	defer mu.Unlock()
+	if entry, exists := store[key]; exists {
+		if entry.expiryTime == 0 || entry.expiryTime > time.Now().UnixMilli() {
+			conn.Write([]byte(fmt.Sprintf("$%d\r\n%s\r\n", len(entry.value), entry.value)))
+		} else {
+			conn.Write([]byte("$-1\r\n")) // Key has expired
+		}
 	} else {
-		conn.Write([]byte("-ERR key not found\r\n"))
+		conn.Write([]byte("$-1\r\n")) // Key does not exist
 	}
 }
 
@@ -75,7 +88,13 @@ func handle(conn net.Conn) {
 			case "ECHO":
 				handleEcho(conn, commandArray[i+2])
 			case "SET":
-				handleSet(conn, commandArray[i+2], commandArray[i+4])
+				key := commandArray[i+2]
+				value := commandArray[i+4]
+				pxMillis := int64(0)
+				if len(commandArray) > i+5 && (commandArray[i+5] == "PX" || commandArray[i+5] == "px") {
+					pxMillis = int64(0) // Placeholder for actual expiry time logic
+				}
+				handleSet(conn, key, value, pxMillis)
 			case "GET":
 				handleGet(conn, commandArray[i+2])
 			}
