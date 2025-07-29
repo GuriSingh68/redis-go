@@ -59,6 +59,7 @@ func handleGet(conn net.Conn, key string) {
 		if entry.expiryTime == 0 || entry.expiryTime > time.Now().UnixMilli() {
 			conn.Write([]byte(fmt.Sprintf("$%d\r\n%s\r\n", len(entry.value), entry.value)))
 		} else {
+			delete(store, key)
 			conn.Write([]byte("$-1\r\n")) // Key has expired
 		}
 	} else {
