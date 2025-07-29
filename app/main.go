@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"os"
 	"strings"
@@ -34,6 +35,7 @@ func handleEcho(conn net.Conn, message string) {
 
 func handleSet(conn net.Conn, key, value string) {
 	mu.Lock()
+	log.Println("Setting key:", key, "to value:", value)
 	store[key] = value
 	mu.Unlock()
 	conn.Write([]byte("+OK\r\n"))
@@ -42,6 +44,7 @@ func handleSet(conn net.Conn, key, value string) {
 func handleGet(conn net.Conn, key string) {
 	mu.Lock()
 	value, ok := store[key]
+	log.Println("Getting key:", key, "with value:", value, "found:", ok)
 	mu.Unlock()
 	if ok {
 		conn.Write([]byte(fmt.Sprintf("$%d\r\n%s\r\n", len(value), value)))
@@ -72,9 +75,9 @@ func handle(conn net.Conn) {
 			case "ECHO":
 				handleEcho(conn, commandArray[i+2])
 			case "SET":
-				handleSet(conn, commandArray[i+3], commandArray[i+4])
+				handleSet(conn, commandArray[i+2], commandArray[i+4])
 			case "GET":
-				handleGet(conn, commandArray[i+1])
+				handleGet(conn, commandArray[i+2])
 			}
 		}
 
